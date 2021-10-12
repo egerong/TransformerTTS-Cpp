@@ -10,7 +10,7 @@
                 "main.cpp",
                 //"${file}",
                 "-g",
-                "phonemize.cpp",
+                "preprocess.cpp",
                 "-lespeak-ng",
                 "-o",
                 "${fileDirname}/main.out"
