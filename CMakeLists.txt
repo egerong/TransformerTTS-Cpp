@@ -8,13 +8,16 @@ add_executable(TransformerTTS-Cpp main.cpp)
 
 ADD_LIBRARY(LibsModule 
     preprocess.cpp
-    model.cpp
+    predict.cpp
 )
+
+find_library(TENSORFLOW_LIB tensorflow HINT $ENV{HOME}/libtensorflow2/lib)
 
 target_link_libraries(
     TransformerTTS-Cpp
     LibsModule
     -lespeak-ng
+    "${TENSORFLOW_LIB}"
 )
 
 set(CPACK_PROJECT_NAME ${PROJECT_NAME})

@@ -47,12 +47,12 @@ int InitPreprocessor(const char *language, const char *data_path) {
 
 vector<int> PreProcess(string text) {
     wstring phons = phonemize(text);
-    cout << "Phonemes" << strconverter.to_bytes(phons) << endl;
+    //cout << "Phonemes" << strconverter.to_bytes(phons) << endl;
     vector<int> tokens = tokenize(phons);
-    printf("Tokens: ");
+    /*printf("Tokens: ");
     for (int i=0; i<tokens.size(); i++) {
         printf("%d, ", tokens[i]);
-    }
+    }*/
     return tokens;
 }
 
