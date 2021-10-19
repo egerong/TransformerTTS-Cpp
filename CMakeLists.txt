@@ -18,12 +18,16 @@ find_library(ESPEAK_LIB espeak-ng)
 # Tensorflow
 find_library(TENSORFLOW_LIB tensorflow HINT $ENV{HOME}/libtensorflow2/lib)
 
+# Nanosnap
+add_subdirectory(lib/nanosnap)
+
 # Link all
 target_link_libraries(
     TransformerTTS-CPP
     Includes
     ${ESPEAK_LIB}
     ${TENSORFLOW_LIB}
+    nanosnap
 )
 
 set(CPACK_PROJECT_NAME ${PROJECT_NAME})

@@ -1,0 +1,3 @@
+[submodule "lib/nanosnap"]
+	path = lib/nanosnap
+	url = git@github.com:lighttransport/nanosnap.git
