@@ -6,16 +6,15 @@ enable_testing()
 
 add_executable(TransformerTTS-Cpp main.cpp)
 
-ADD_LIBRARY(LibsModule 
-    preprocess.cpp
-    predict.cpp
+ADD_LIBRARY(Transformer 
+    transformer.cpp
 )
 
 find_library(TENSORFLOW_LIB tensorflow HINT $ENV{HOME}/libtensorflow2/lib)
 
 target_link_libraries(
     TransformerTTS-Cpp
-    LibsModule
+    Transformer
     -lespeak-ng
     "${TENSORFLOW_LIB}"
 )
