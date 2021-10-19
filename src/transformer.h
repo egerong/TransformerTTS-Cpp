@@ -9,7 +9,7 @@
 #include <vector>
 
 #include <espeak-ng/speak_lib.h>
-#include "include/cppflow/cppflow.h"
+#include "cppflow/cppflow.h"
 
 #define MODEL_INPUT "serving_default_input_1:0"
 #define MODEL_OUTPUT "StatefulPartitionedCall:14"
