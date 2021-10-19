@@ -7,28 +7,39 @@
 #include <iostream>
 #include <map>
 #include <vector>
+#include <math.h>
 
 #include <espeak-ng/speak_lib.h>
 #include "cppflow/cppflow.h"
+#include "nanosnap/nanosnap.h"
 
-#define MODEL_INPUT "serving_default_input_1:0"
-#define MODEL_OUTPUT "StatefulPartitionedCall:14"
-#define MEL_CHANNELS 80
 
-#define ALL_PHONEMES " !'(),-.:;?abcdefhijklmnopqrstuvwxyzæçðøħŋœǀǁǂǃɐɑɒɓɔɕɖɗɘəɚɛɜɞɟɠɡɢɣɤɥɦɧɨɪɫɬɭɮɯɰɱɲɳɴɵɶɸɹɺɻɽɾʀʁʂʃʄʈʉʊʋʌʍʎʏʐʑʒʔʕʘʙʛʜʝʟʡʢˈˌːˑ˞βθχᵻⱱ"
-#define PUNCTUATION "!,-.:;?()"
-
+struct TransformerConfig {
+    bool verbose;
+    std::string espeakLang;
+    std::string espeakDataPath;
+    std::string modelPath;
+    bool withStress;
+    int sampleRate;
+    int nMel;
+    int nFFT;
+    int fMin;
+    int fMax;
+};
 
 class Transformer {
 public:
     std::string error;
-    Transformer(std::string language, std::string espeak_data_path, std::string model_path);
+
+    Transformer(TransformerConfig newConfig);
     std::vector<float> Synthesize(std::string text);
 private:
     std::map<wchar_t, int> tokenMap;
     cppflow::model* model;
+    TransformerConfig config;
 
     std::wstring phonemize(std::string text);
     std::vector<int> tokenize(std::wstring phons);
     std::vector<float> runModel(std::vector<int> tokens);
+    void recreate(std::vector<float> mel);
 };

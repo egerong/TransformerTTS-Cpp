@@ -1,20 +1,25 @@
 #include "transformer.h"
+#include "nanosnap/nanosnap.h"
 
 using namespace std;
+
+#define MODEL_INPUT "serving_default_input_1:0"
+#define MODEL_OUTPUT "StatefulPartitionedCall:14"
+
+#define ALL_PHONEMES " !'(),-.:;?abcdefhijklmnopqrstuvwxyzæçðøħŋœǀǁǂǃɐɑɒɓɔɕɖɗɘəɚɛɜɞɟɠɡɢɣɤɥɦɧɨɪɫɬɭɮɯɰɱɲɳɴɵɶɸɹɺɻɽɾʀʁʂʃʄʈʉʊʋʌʍʎʏʐʑʒʔʕʘʙʛʜʝʟʡʢˈˌːˑ˞βθχᵻⱱ"
+#define PUNCTUATION "!,-.:;?()"
+
 
 // For char to wchar conversion
 using convert_t = std::codecvt_utf8<wchar_t>;
 wstring_convert<convert_t, wchar_t> strconverter;
 
 
-Transformer::Transformer(
-    string language,
-    string espeak_data_path,
-    string model_path)
-{
+Transformer::Transformer(TransformerConfig newConfig) {
+    config = newConfig;
     // Init eSpeak
-    espeak_Initialize(AUDIO_OUTPUT_SYNCHRONOUS, 1, espeak_data_path.c_str(), 0);
-    int e = espeak_SetVoiceByName(language.c_str());
+    espeak_Initialize(AUDIO_OUTPUT_SYNCHRONOUS, 1, config.espeakDataPath.c_str(), 0);
+    int e = espeak_SetVoiceByName(config.espeakLang.c_str());
     if (e != 0) {
         error = "Failed to initialize espeak, check paths and language";
         return;
@@ -26,10 +31,11 @@ Transformer::Transformer(
         tokenMap.insert(pair<wchar_t, int>(all_phonemes[i], i + 1));
     }
     // Load model
-    model = new cppflow::model(model_path);
+    model = new cppflow::model(config.modelPath);
 }
 
 vector<float> Transformer::Synthesize(string text) {
+
     auto phonemes = phonemize(text);
     auto tokens = tokenize(phonemes);
     auto mel = runModel(tokens);
@@ -102,5 +108,26 @@ vector<float> Transformer::runModel(vector<int> tokens) {
     auto shape2 = output[0].shape();
     auto shape2vec = shape2.get_tensor();
     auto shape2data = shape2.get_data<int64_t>();
+
+}
+
+void Transformer::recreate(vector<float> input) {
+    // Denormalize
+    vector<float> denorm;
+    denorm.reserve(input.size());
+    for (auto& val : input) {
+        denorm.push_back(expf32(val));
+    }
+
+    // STFT
+    auto basis = nanosnap::mel_filter(
+        config.sampleRate,
+        config.nFFT,
+        &denorm,
+        config.nMel,
+        config.fMin,
+        config.fMax
+    );
+    // Griffin-Lim
 
 }
