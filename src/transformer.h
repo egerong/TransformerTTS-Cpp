@@ -12,7 +12,8 @@
 #include <espeak-ng/speak_lib.h>
 #include "cppflow/cppflow.h"
 #include "nanosnap/nanosnap.h"
-
+#include "Eigen/Dense"
+#include "Eigen/nnls.h"
 
 struct TransformerConfig {
     bool verbose;
