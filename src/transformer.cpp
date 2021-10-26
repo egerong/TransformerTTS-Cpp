@@ -1,7 +1,7 @@
 #include "transformer.h"
-#include "nanosnap/nanosnap.h"
 
 using namespace std;
+using namespace Eigen;
 
 #define MODEL_INPUT "serving_default_input_1:0"
 #define MODEL_OUTPUT "StatefulPartitionedCall:14"
@@ -39,6 +39,7 @@ vector<float> Transformer::Synthesize(string text) {
     auto phonemes = phonemize(text);
     auto tokens = tokenize(phonemes);
     auto mel = runModel(tokens);
+    recreate(mel);
     return mel;
 }
 
@@ -102,32 +103,79 @@ vector<float> Transformer::runModel(vector<int> tokens) {
     auto output = (*model)({ {MODEL_INPUT, input} }, { MODEL_OUTPUT });
     auto values = output[0].get_data<float>();
 
-    return values;
 
     //output = cppflow::cast(output, TF_FLOAT, TF_INT32);
     auto shape2 = output[0].shape();
     auto shape2vec = shape2.get_tensor();
     auto shape2data = shape2.get_data<int64_t>();
 
+    return values;
 }
 
-void Transformer::recreate(vector<float> input) {
-    // Denormalize
-    vector<float> denorm;
-    denorm.reserve(input.size());
-    for (auto& val : input) {
-        denorm.push_back(expf32(val));
+void Transformer::recreate(vector<float> mel) {
+    int i;
+    //* Denormalize (in place)
+    for (i = 0; i < mel.size(); i++) {
+        mel[i] = expf32(mel[i]);
     }
+    // Convert to matrix for further processing
+    auto amp = vecToMat(mel, mel.size() / config.nMel);
+    amp.transposeInPlace();
 
-    // STFT
-    auto basis = nanosnap::mel_filter(
+    //* MEL to STFT
+
+    auto basis = (MatrixXf)librosa::internal::melfilter(
         config.sampleRate,
         config.nFFT,
-        &denorm,
         config.nMel,
         config.fMin,
         config.fMax
     );
-    // Griffin-Lim
 
+    MatrixXf inverse(basis.cols(), amp.cols());
+    VectorXf temp(amp.rows());
+
+    nnls_mc<MatrixXf>(
+        basis.data(),
+        amp.data(),
+        inverse.data(),
+        (int)basis.rows(),
+        (int)basis.cols(),
+        (int)amp.cols()
+        );
+
+    /*
+no instance of constructor "Eigen::NNLS<_MatrixType>::NNLS [with _MatrixType=Eigen::MatrixXf]" matches the argument list -- argument types are: (Eigen::MatrixXf *, Eigen::MatrixXf *, Eigen::MatrixXf *, int, int, int)
+
+    // NNLS
+    NNLS<MatrixXf> nnls(basis, 64);
+
+    for (i = 70; i < amp.cols(); i++) {
+        temp = amp.col(i);
+        if (!nnls.solve(temp)) {
+            cout << "Failed to converge on row " << i << endl;
+        }
+        //NNLS<MatrixXf> nnls(basis);
+        inverse.col(i) = nnls.x();
+    }
+
+    */
+    /*cout << basis.bdcSvd(ComputeThinU | ComputeThinV).solve(mat);
+
+    */
+
+
+    // Apply inverse exponent (in current case do nothing)
+
+
+
+    for (int i = 0; i < 30; i++) {
+        cout << mel[i] << " ";
+    }
+    cout << endl;
+
+
+    //* Griffin-Lim
+    return;
 }
+
