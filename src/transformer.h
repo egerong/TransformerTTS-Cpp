@@ -1,24 +1,24 @@
 #include <stdio.h>
+#include <iostream>
+#include <iomanip>
+#include <fstream>
+
 #include <string>
 #include <string.h>
 #include <codecvt>
 #include <locale>
-#include <algorithm>
-#include <iostream>
-#include <iomanip>
+
 #include <map>
 #include <vector>
 #include <math.h>
+#include <algorithm>
 
 #include <espeak-ng/speak_lib.h>
 #include "cppflow/cppflow.h"
-
 #include "Eigen/Eigen"
 #include "Eigen/Dense"
 #include "librosa.h"
 #include <nlopt.hpp>
-
-#include "utils.h"
 
 struct TransformerConfig {
     bool verbose;
@@ -49,10 +49,10 @@ private:
     std::wstring phonemize(std::string text);
     std::vector<int> tokenize(std::wstring phons);
     Eigen::MatrixXd runModel(std::vector<int> tokens);
-    void recreate(Eigen::MatrixXd mel);
 
-    Eigen::MatrixXd nnlsMat(Eigen::MatrixXd B);
-    Eigen::VectorXd nnlsVec(Eigen::VectorXd b);
+    Eigen::MatrixXd melToSTFT(Eigen::MatrixXd B);
+    Eigen::VectorXd nnls(Eigen::VectorXd b);
+
 };
 
 struct OptData {
@@ -60,4 +60,6 @@ struct OptData {
     Eigen::VectorXd b;
 };
 
-double normFunc(const std::vector<double>& xRaw, std::vector<double>& gradRaw, void* f_data);
+double optFunc(const std::vector<double>& xRaw, std::vector<double>& gradRaw, void* f_data);
+
+void matToCSV(Eigen::MatrixXd mat, std::string filePath);

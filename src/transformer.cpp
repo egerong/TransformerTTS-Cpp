@@ -3,12 +3,14 @@
 using namespace std;
 using namespace Eigen;
 
-#define MODEL_INPUT "serving_default_input_1:0"
-#define MODEL_OUTPUT "StatefulPartitionedCall:14"
-
 #define ALL_PHONEMES " !'(),-.:;?abcdefhijklmnopqrstuvwxyzæçðøħŋœǀǁǂǃɐɑɒɓɔɕɖɗɘəɚɛɜɞɟɠɡɢɣɤɥɦɧɨɪɫɬɭɮɯɰɱɲɳɴɵɶɸɹɺɻɽɾʀʁʂʃʄʈʉʊʋʌʍʎʏʐʑʒʔʕʘʙʛʜʝʟʡʢˈˌːˑ˞βθχᵻⱱ"
 #define PUNCTUATION "!,-.:;?()"
 
+#define MODEL_INPUT "serving_default_input_1:0"
+#define MODEL_OUTPUT "StatefulPartitionedCall:14"
+
+#define OPT_MAX_EVAL 5000
+#define OPT_TOL_ABS 1e-8
 
 // For char to wchar conversion
 using convert_t = std::codecvt_utf8<wchar_t>;
@@ -46,8 +48,9 @@ void Transformer::Synthesize(string text) {
 
     auto phonemes = phonemize(text);
     auto tokens = tokenize(phonemes);
-    auto mel = runModel(tokens);
-    recreate(mel);
+    MatrixXd mel = runModel(tokens);
+    MatrixXd stft = melToSTFT(mel);
+    matToCSV(stft, "/home/egert/Prog/TTS-CPP/temp/inverse.csv");
 }
 
 wstring Transformer::phonemize(string text) {
@@ -109,51 +112,25 @@ MatrixXd Transformer::runModel(vector<int> tokens) {
 
     auto output = (*model)({ {MODEL_INPUT, input} }, { MODEL_OUTPUT });
     auto values = output[0].get_data<float>();
-    auto mat = MatrixXf::Map(values.data(), config.nMel, values.size() / config.nMel);
-
-
-    //output = cppflow::cast(output, TF_FLOAT, TF_INT32);
-    auto shape2 = output[0].shape();
-    auto shape2vec = shape2.get_tensor();
-    auto shape2data = shape2.get_data<int64_t>();
+    MatrixXf mat = MatrixXf::Map(values.data(), config.nMel, values.size() / config.nMel);
 
     return mat.cast<double>();
 }
 
-void Transformer::recreate(MatrixXd mel) {
-    //* Denormalize (in place)
-    auto amp = mel.array().exp().matrix();
 
-    matToCSV(amp, "/home/egert/Prog/TTS-CPP/amp.csv");
-
-    //* MEL to STFT
-
-    auto inverse = nnlsMat(amp);
-
-    matToCSV(inverse, "/home/egert/Prog/TTS-CPP/inverse.csv");
-
-
-
-
-    //* Griffin-Lim
-    return;
-}
-
-MatrixXd Transformer::nnlsMat(MatrixXd B) {
+MatrixXd Transformer::melToSTFT(MatrixXd mel) {
+    MatrixXd B = mel.array().exp().matrix();
     VectorXd temp;
     MatrixXd inverse(basis.cols(), B.cols());
     for (int i = 0; i < B.cols(); i++) {
         cout << i << "\t";
-        //temp = B.col(i);
-        //nnlsVec(temp, inverse.col(i));
-        temp = nnlsVec(B.col(i));
+        temp = nnls(B.col(i));
         inverse.col(i) = temp;
     }
     return inverse;
 }
 
-VectorXd Transformer::nnlsVec(VectorXd b) {
-    //VectorXd x = basis.colPivHouseholderQr().solve(b);
+VectorXd Transformer::nnls(VectorXd b) {
     VectorXd x = basis.bdcSvd(ComputeThinU | ComputeThinV).solve(b);
     for (int j = 0; j < x.size(); j++) {
         if (x[j] < 0) {
@@ -164,17 +141,15 @@ VectorXd Transformer::nnlsVec(VectorXd b) {
     xRaw.resize(x.size());
     VectorXd::Map(xRaw.data(), x.size()) = x;
 
-
     nlopt::opt opt(nlopt::LD_LBFGS, x.size());
     OptData data{
         .A = basis,
         .b = b
     };
-    opt.set_min_objective(normFunc, &data);
+    opt.set_min_objective(optFunc, &data);
     opt.set_lower_bounds(0);
-    opt.set_maxeval(15000);
-    opt.set_xtol_abs(1e-8);
-
+    opt.set_maxeval(OPT_MAX_EVAL);
+    opt.set_xtol_abs(OPT_TOL_ABS);
     double minf;
 
     try {
@@ -190,16 +165,21 @@ VectorXd Transformer::nnlsVec(VectorXd b) {
 
 //void nnlsObj(x, shape, A, B)
 
-double normFunc(const vector<double>& xRaw, vector<double>& gradRaw, void* f_data) {
+double optFunc(const vector<double>& xRaw, vector<double>& gradRaw, void* f_data) {
     auto data = (OptData*)f_data;
-    auto x = VectorXd::Map(xRaw.data(), xRaw.size());
-
-    auto diff = data->A * x - data->b;
-    //auto value = diff.squaredNorm();
+    VectorXd x = VectorXd::Map(xRaw.data(), xRaw.size());
+    VectorXd diff = data->A * x - data->b;
 
     if (!gradRaw.empty()) {
-        auto grad = VectorXd::Map(gradRaw.data(), gradRaw.size());
+        VectorXd grad = VectorXd::Map(gradRaw.data(), gradRaw.size());
         grad = data->A.transpose() * diff;
     }
     return 0.5 * diff.squaredNorm();
+}
+
+const static IOFormat CSVFormat(StreamPrecision, DontAlignCols, ", ", "\n");
+
+void matToCSV(MatrixXd mat, string filePath) {
+    ofstream file(filePath.c_str());
+    file << mat.format(CSVFormat);
 }

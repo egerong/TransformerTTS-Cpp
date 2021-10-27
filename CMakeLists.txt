@@ -10,10 +10,6 @@ enable_testing()
 add_library(TransformerTTS-CPP src/transformer.cpp)
 target_include_directories(TransformerTTS-CPP PUBLIC src)
 
-# Utils
-add_library(Utils src/utils.cpp)
-target_link_libraries(Utils Includes)
-
 # Include dir
 add_library(Includes INTERFACE)
 target_include_directories(Includes INTERFACE include)
@@ -30,7 +26,6 @@ add_subdirectory(lib/nlopt)
 # Link all
 target_link_libraries(
     TransformerTTS-CPP
-    Utils
     Includes
     ${ESPEAK_LIB}
     ${TENSORFLOW_LIB}
