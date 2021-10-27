@@ -32,15 +32,22 @@ Transformer::Transformer(TransformerConfig newConfig) {
     }
     // Load model
     model = new cppflow::model(config.modelPath);
+    // Create MEL basis
+    basis = librosa::internal::melfilter(
+        config.sampleRate,
+        config.nFFT,
+        config.nMel,
+        config.fMin,
+        config.fMax
+    ).cast<double>();
 }
 
-vector<float> Transformer::Synthesize(string text) {
+void Transformer::Synthesize(string text) {
 
     auto phonemes = phonemize(text);
     auto tokens = tokenize(phonemes);
     auto mel = runModel(tokens);
     recreate(mel);
-    return mel;
 }
 
 wstring Transformer::phonemize(string text) {
@@ -90,7 +97,7 @@ vector<int> Transformer::tokenize(wstring phons) {
     return tokens;
 }
 
-vector<float> Transformer::runModel(vector<int> tokens) {
+MatrixXd Transformer::runModel(vector<int> tokens) {
 
     std::vector<int64_t> shape(1);
     shape[0] = tokens.size();
@@ -102,6 +109,7 @@ vector<float> Transformer::runModel(vector<int> tokens) {
 
     auto output = (*model)({ {MODEL_INPUT, input} }, { MODEL_OUTPUT });
     auto values = output[0].get_data<float>();
+    auto mat = MatrixXf::Map(values.data(), config.nMel, values.size() / config.nMel);
 
 
     //output = cppflow::cast(output, TF_FLOAT, TF_INT32);
@@ -109,73 +117,89 @@ vector<float> Transformer::runModel(vector<int> tokens) {
     auto shape2vec = shape2.get_tensor();
     auto shape2data = shape2.get_data<int64_t>();
 
-    return values;
+    return mat.cast<double>();
 }
 
-void Transformer::recreate(vector<float> mel) {
-    int i;
+void Transformer::recreate(MatrixXd mel) {
     //* Denormalize (in place)
-    for (i = 0; i < mel.size(); i++) {
-        mel[i] = expf32(mel[i]);
-    }
-    // Convert to matrix for further processing
-    auto amp = vecToMat(mel, mel.size() / config.nMel);
-    amp.transposeInPlace();
+    auto amp = mel.array().exp().matrix();
+
+    matToCSV(amp, "/home/egert/Prog/TTS-CPP/amp.csv");
 
     //* MEL to STFT
 
-    auto basis = (MatrixXf)librosa::internal::melfilter(
-        config.sampleRate,
-        config.nFFT,
-        config.nMel,
-        config.fMin,
-        config.fMax
-    );
+    auto inverse = nnlsMat(amp);
 
-    MatrixXf inverse(basis.cols(), amp.cols());
-    VectorXf temp(amp.rows());
-
-    nnls_mc<MatrixXf>(
-        basis.data(),
-        amp.data(),
-        inverse.data(),
-        (int)basis.rows(),
-        (int)basis.cols(),
-        (int)amp.cols()
-        );
-
-    /*
-no instance of constructor "Eigen::NNLS<_MatrixType>::NNLS [with _MatrixType=Eigen::MatrixXf]" matches the argument list -- argument types are: (Eigen::MatrixXf *, Eigen::MatrixXf *, Eigen::MatrixXf *, int, int, int)
-
-    // NNLS
-    NNLS<MatrixXf> nnls(basis, 64);
-
-    for (i = 70; i < amp.cols(); i++) {
-        temp = amp.col(i);
-        if (!nnls.solve(temp)) {
-            cout << "Failed to converge on row " << i << endl;
-        }
-        //NNLS<MatrixXf> nnls(basis);
-        inverse.col(i) = nnls.x();
-    }
-
-    */
-    /*cout << basis.bdcSvd(ComputeThinU | ComputeThinV).solve(mat);
-
-    */
+    matToCSV(inverse, "/home/egert/Prog/TTS-CPP/inverse.csv");
 
 
-    // Apply inverse exponent (in current case do nothing)
-
-
-
-    for (int i = 0; i < 30; i++) {
-        cout << mel[i] << " ";
-    }
-    cout << endl;
 
 
     //* Griffin-Lim
     return;
 }
 
+MatrixXd Transformer::nnlsMat(MatrixXd B) {
+    VectorXd temp;
+    MatrixXd inverse(basis.cols(), B.cols());
+    for (int i = 0; i < B.cols(); i++) {
+        cout << i << "\t";
+        //temp = B.col(i);
+        //nnlsVec(temp, inverse.col(i));
+        temp = nnlsVec(B.col(i));
+        inverse.col(i) = temp;
+    }
+    return inverse;
+}
+
+VectorXd Transformer::nnlsVec(VectorXd b) {
+    //VectorXd x = basis.colPivHouseholderQr().solve(b);
+    VectorXd x = basis.bdcSvd(ComputeThinU | ComputeThinV).solve(b);
+    for (int j = 0; j < x.size(); j++) {
+        if (x[j] < 0) {
+            x[j] = 0;
+        }
+    }
+    vector<double> xRaw;
+    xRaw.resize(x.size());
+    VectorXd::Map(xRaw.data(), x.size()) = x;
+
+
+    nlopt::opt opt(nlopt::LD_LBFGS, x.size());
+    OptData data{
+        .A = basis,
+        .b = b
+    };
+    opt.set_min_objective(normFunc, &data);
+    opt.set_lower_bounds(0);
+    opt.set_maxeval(15000);
+    opt.set_xtol_abs(1e-8);
+
+    double minf;
+
+    try {
+        nlopt::result result = opt.optimize(xRaw, minf);
+        cout << minf << endl;
+    }
+    catch (std::exception& e) {
+        std::cout << "nlopt failed: " << e.what() << std::endl;
+    }
+    x = VectorXd::Map(xRaw.data(), xRaw.size());
+    return x;
+}
+
+//void nnlsObj(x, shape, A, B)
+
+double normFunc(const vector<double>& xRaw, vector<double>& gradRaw, void* f_data) {
+    auto data = (OptData*)f_data;
+    auto x = VectorXd::Map(xRaw.data(), xRaw.size());
+
+    auto diff = data->A * x - data->b;
+    //auto value = diff.squaredNorm();
+
+    if (!gradRaw.empty()) {
+        auto grad = VectorXd::Map(gradRaw.data(), gradRaw.size());
+        grad = data->A.transpose() * diff;
+    }
+    return 0.5 * diff.squaredNorm();
+}

@@ -5,6 +5,7 @@
 #include <locale>
 #include <algorithm>
 #include <iostream>
+#include <iomanip>
 #include <map>
 #include <vector>
 #include <math.h>
@@ -15,9 +16,7 @@
 #include "Eigen/Eigen"
 #include "Eigen/Dense"
 #include "librosa.h"
-#include "Eigen/custom/nnls_mc.h"
-
-//#include <nlopt.hpp>
+#include <nlopt.hpp>
 
 #include "utils.h"
 
@@ -37,16 +36,28 @@ struct TransformerConfig {
 class Transformer {
 public:
     std::string error;
-
-    Transformer(TransformerConfig newConfig);
-    std::vector<float> Synthesize(std::string text);
 private:
+    TransformerConfig config;
     std::map<wchar_t, int> tokenMap;
     cppflow::model* model;
-    TransformerConfig config;
+    Eigen::MatrixXd basis;
 
+public:
+    Transformer(TransformerConfig newConfig);
+    void Synthesize(std::string text);
+private:
     std::wstring phonemize(std::string text);
     std::vector<int> tokenize(std::wstring phons);
-    std::vector<float> runModel(std::vector<int> tokens);
-    void recreate(std::vector<float> mel);
+    Eigen::MatrixXd runModel(std::vector<int> tokens);
+    void recreate(Eigen::MatrixXd mel);
+
+    Eigen::MatrixXd nnlsMat(Eigen::MatrixXd B);
+    Eigen::VectorXd nnlsVec(Eigen::VectorXd b);
 };
+
+struct OptData {
+    Eigen::MatrixXd A;
+    Eigen::VectorXd b;
+};
+
+double normFunc(const std::vector<double>& xRaw, std::vector<double>& gradRaw, void* f_data);

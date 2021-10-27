@@ -24,7 +24,7 @@ find_library(ESPEAK_LIB espeak-ng)
 find_library(TENSORFLOW_LIB tensorflow HINT $ENV{HOME}/libtensorflow2/lib)
 
 # NLopt
-#add_subdirectory(lib/nlopt)
+add_subdirectory(lib/nlopt)
 
 # Link all
 target_link_libraries(
@@ -33,7 +33,7 @@ target_link_libraries(
     Includes
     ${ESPEAK_LIB}
     ${TENSORFLOW_LIB}
-    #nlopt
+    nlopt
 )
 
 set(CPACK_PROJECT_NAME ${PROJECT_NAME})
