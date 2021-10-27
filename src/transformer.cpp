@@ -163,8 +163,6 @@ VectorXd Transformer::nnls(VectorXd b) {
     return x;
 }
 
-//void nnlsObj(x, shape, A, B)
-
 double optFunc(const vector<double>& xRaw, vector<double>& gradRaw, void* f_data) {
     auto data = (OptData*)f_data;
     VectorXd x = VectorXd::Map(xRaw.data(), xRaw.size());
