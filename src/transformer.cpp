@@ -49,8 +49,9 @@ void Transformer::Synthesize(string text) {
     auto phonemes = phonemize(text);
     auto tokens = tokenize(phonemes);
     MatrixXd mel = runModel(tokens);
-    MatrixXd stft = melToSTFT(mel);
-    matToCSV(stft, "/home/egert/Prog/TTS-CPP/temp/inverse.csv");
+    MatrixXd s = melToSTFT(mel);
+    VectorXd wav = griffinLim(s);
+    //matToCSV(stft, "/home/egert/Prog/TTS-CPP/temp/inverse.csv");
 }
 
 wstring Transformer::phonemize(string text) {
@@ -173,6 +174,18 @@ double optFunc(const vector<double>& xRaw, vector<double>& gradRaw, void* f_data
         grad = data->A.transpose() * diff;
     }
     return 0.5 * diff.squaredNorm();
+}
+
+VectorXd Transformer::griffinLim(MatrixXd S) {
+    VectorXd out;
+
+    // Initialize phase with random angles
+    MatrixXcd angles = MatrixXcd::NullaryExpr(
+        S.rows(), S.cols(),
+        [&]() { return exp(2 * M_PI * (double)rand() / (double)RAND_MAX); }
+    );
+
+    return out;
 }
 
 const static IOFormat CSVFormat(StreamPrecision, DontAlignCols, ", ", "\n");

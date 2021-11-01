@@ -11,7 +11,9 @@
 #include <map>
 #include <vector>
 #include <math.h>
+#include <complex.h>
 #include <algorithm>
+#include <random>
 
 #include <espeak-ng/speak_lib.h>
 #include "cppflow/cppflow.h"
@@ -27,8 +29,10 @@ struct TransformerConfig {
     std::string modelPath;
     bool withStress;
     int sampleRate;
-    int nMel;
     int nFFT;
+    int nMel;
+    int hopLength;
+    int winLength;
     int fMin;
     int fMax;
 };
@@ -52,7 +56,7 @@ private:
 
     Eigen::MatrixXd melToSTFT(Eigen::MatrixXd B);
     Eigen::VectorXd nnls(Eigen::VectorXd b);
-
+    Eigen::VectorXd griffinLim(Eigen::MatrixXd S);
 };
 
 struct OptData {
