@@ -12,6 +12,9 @@ using namespace Eigen;
 #define OPT_MAX_EVAL 5000
 #define OPT_TOL_ABS 1e-8
 
+#define GL_ITER 32
+#define GL_MOMENTUM 0.99
+
 // For char to wchar conversion
 using convert_t = std::codecvt_utf8<wchar_t>;
 wstring_convert<convert_t, wchar_t> strconverter;
@@ -50,7 +53,7 @@ void Transformer::Synthesize(string text) {
     auto tokens = tokenize(phonemes);
     MatrixXd mel = runModel(tokens);
     MatrixXd s = melToSTFT(mel);
-    VectorXd wav = griffinLim(s);
+    VectorXf wav = griffinLim(s);
     //matToCSV(stft, "/home/egert/Prog/TTS-CPP/temp/inverse.csv");
 }
 
@@ -176,16 +179,95 @@ double optFunc(const vector<double>& xRaw, vector<double>& gradRaw, void* f_data
     return 0.5 * diff.squaredNorm();
 }
 
-VectorXd Transformer::griffinLim(MatrixXd S) {
-    VectorXd out;
+complex<float> randAng() {
+    auto x = std::exp((complex<double>)2i * (complex<double>)M_PI * (complex<double>)rand() / (complex<double>)RAND_MAX);
+    return (complex<float>)x;
+}
+
+vector<float> Transformer::griffinLim(MatrixXd S) {
+    VectorXf out;
+    MatrixXf mag = S.cast<float>();
 
     // Initialize phase with random angles
-    MatrixXcd angles = MatrixXcd::NullaryExpr(
-        S.rows(), S.cols(),
-        [&]() { return exp(2 * M_PI * (double)rand() / (double)RAND_MAX); }
+    MatrixXcf angles = MatrixXcf::NullaryExpr(
+        mag.rows(), mag.cols(),
+        [&]() {
+            return randAng();
+        }
     );
 
-    return out;
+
+    MatrixXcf stft;
+    vector<float> inverse;
+
+    //MatrixXcf stft;
+
+    vector<complex<float>> rebuiltRaw;
+    rebuiltRaw.resize(S.rows() * S.cols());
+    MatrixXcf rebuilt = MatrixXcf::Map(rebuiltRaw.data(), S.rows(), S.cols());
+
+    MatrixXcf prev;
+
+
+    //invStd.resize(mag.rows() * mag.cols());
+    //Map<Array<complex<float>, Dynamic, Dynamic, RowMajor> > invEig(invStd.data());
+
+    float conf = GL_MOMENTUM / (1 + GL_MOMENTUM);
+    for (int i = 0; i < GL_ITER; i++) {
+        prev = rebuilt;
+
+        stft = (mag.array() * angles.array()).matrix();
+        if (!nanosnap::istft(
+            stft.data(),
+            stft.rows(),
+            stft.cols(),
+            config.hopLength,
+            config.winLength,
+            &inverse
+        )) {
+            cout << "Inverse STFT failed" << endl;
+        }
+
+        if (!nanosnap::stft(
+            inverse.data(),
+            inverse.size(),
+            config.nFFT,
+            config.hopLength,
+            config.winLength,
+            &rebuiltRaw
+        )) {
+            cout << "STFT failed" << endl;
+        }
+        rebuilt = MatrixXcf::Map(rebuiltRaw.data(), S.rows(), S.cols());
+        angles = rebuilt - prev * conf;
+        angles = (angles.array() / (angles.array().abs() + 1e-16)).eval();
+    }
+
+    stft = (mag.array() * angles.array()).matrix();
+    if (!nanosnap::istft(
+        stft.data(),
+        stft.rows(),
+        stft.cols(),
+        config.hopLength,
+        config.winLength,
+        &inverse
+    )) {
+        cout << "Inverse STFT failed" << endl;
+    }
+
+
+    return inverse;
+}
+
+bool Transformer::saveWAV(string filename, vector<float> data) {
+    nanosnap::wav_write(
+        filename,
+        config.sampleRate,
+        "float32",
+        1,
+        data.size(),
+        data.data()
+    )
 }
 
 const static IOFormat CSVFormat(StreamPrecision, DontAlignCols, ", ", "\n");

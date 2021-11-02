@@ -10,8 +10,8 @@
 
 #include <map>
 #include <vector>
-#include <math.h>
-#include <complex.h>
+//#include <cmath>
+#include <complex>
 #include <algorithm>
 #include <random>
 
@@ -21,6 +21,7 @@
 #include "Eigen/Dense"
 #include "librosa.h"
 #include <nlopt.hpp>
+#include "nanosnap/nanosnap.h"
 
 struct TransformerConfig {
     bool verbose;
@@ -56,7 +57,8 @@ private:
 
     Eigen::MatrixXd melToSTFT(Eigen::MatrixXd B);
     Eigen::VectorXd nnls(Eigen::VectorXd b);
-    Eigen::VectorXd griffinLim(Eigen::MatrixXd S);
+    vector<float> griffinLim(Eigen::MatrixXd S);
+    bool saveWAV(std::string filename, std::vector<float> data);
 };
 
 struct OptData {
