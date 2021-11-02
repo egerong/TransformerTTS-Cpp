@@ -22,6 +22,7 @@
 #include "librosa.h"
 #include <nlopt.hpp>
 #include "nanosnap/nanosnap.h"
+#include "audiofile.h"
 
 struct TransformerConfig {
     bool verbose;
@@ -57,7 +58,7 @@ private:
 
     Eigen::MatrixXd melToSTFT(Eigen::MatrixXd B);
     Eigen::VectorXd nnls(Eigen::VectorXd b);
-    vector<float> griffinLim(Eigen::MatrixXd S);
+    std::vector<float> griffinLim(Eigen::MatrixXd S);
     bool saveWAV(std::string filename, std::vector<float> data);
 };
 

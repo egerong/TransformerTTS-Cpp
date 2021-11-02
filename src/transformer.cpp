@@ -53,7 +53,8 @@ void Transformer::Synthesize(string text) {
     auto tokens = tokenize(phonemes);
     MatrixXd mel = runModel(tokens);
     MatrixXd s = melToSTFT(mel);
-    VectorXf wav = griffinLim(s);
+    vector<float> wav = griffinLim(s);
+    bool success = saveWAV("filename", wav);
     //matToCSV(stft, "/home/egert/Prog/TTS-CPP/temp/inverse.csv");
 }
 
@@ -260,14 +261,12 @@ vector<float> Transformer::griffinLim(MatrixXd S) {
 }
 
 bool Transformer::saveWAV(string filename, vector<float> data) {
-    nanosnap::wav_write(
-        filename,
-        config.sampleRate,
-        "float32",
-        1,
-        data.size(),
-        data.data()
-    )
+    AudioFile<float> a;
+    a.setNumChannels(1);
+    a.setSampleRate(config.sampleRate);
+    //a.setNumSamplesPerChannel(data.size());
+    a.samples[0] = data;
+    return a.save("/home/egert/Prog/TTS-CPP/temp/Karu.wav", AudioFileFormat::Wave);
 }
 
 const static IOFormat CSVFormat(StreamPrecision, DontAlignCols, ", ", "\n");
