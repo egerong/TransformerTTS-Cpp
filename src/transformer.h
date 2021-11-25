@@ -17,11 +17,6 @@
 
 #include <espeak-ng/speak_lib.h>
 #include "cppflow/cppflow.h"
-#include "Eigen/Eigen"
-#include "Eigen/Dense"
-#include "librosa.h"
-#include <nlopt.hpp>
-#include "nanosnap/nanosnap.h"
 #include "audiofile.h"
 
 struct TransformerConfig {
@@ -46,7 +41,6 @@ private:
     TransformerConfig config;
     std::map<wchar_t, int> tokenMap;
     cppflow::model* model;
-    Eigen::MatrixXd basis;
 
 public:
     Transformer(TransformerConfig newConfig);
@@ -54,21 +48,9 @@ public:
 private:
     std::wstring phonemize(std::string text);
     std::vector<int> tokenize(std::wstring phons);
-    Eigen::MatrixXd runModel(std::vector<int> tokens);
+    std::vector<float> runModel(std::vector<int> tokens);
 
-    std::vector<float> vocode(Eigen::MatrixXd mel);
+    std::vector<float> vocode(std::vector<float> mel);
 
-    Eigen::MatrixXd melToSTFT(Eigen::MatrixXd B);
-    Eigen::VectorXd nnls(Eigen::VectorXd b);
-    std::vector<float> griffinLim(Eigen::MatrixXd S);
     bool saveWAV(std::string filename, std::vector<float> data);
 };
-
-struct OptData {
-    Eigen::MatrixXd A;
-    Eigen::VectorXd b;
-};
-
-double optFunc(const std::vector<double>& xRaw, std::vector<double>& gradRaw, void* f_data);
-
-void matToCSV(Eigen::MatrixXd mat, std::string filePath);

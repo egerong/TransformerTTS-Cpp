@@ -1,7 +1,6 @@
 #include "transformer.h"
 
 using namespace std;
-using namespace Eigen;
 
 #define ALL_PHONEMES " !'(),-.:;?abcdefhijklmnopqrstuvwxyzæçðøħŋœǀǁǂǃɐɑɒɓɔɕɖɗɘəɚɛɜɞɟɠɡɢɣɤɥɦɧɨɪɫɬɭɮɯɰɱɲɳɴɵɶɸɹɺɻɽɾʀʁʂʃʄʈʉʊʋʌʍʎʏʐʑʒʔʕʘʙʛʜʝʟʡʢˈˌːˑ˞βθχᵻⱱ"
 #define PUNCTUATION "!,-.:;?()"
@@ -42,21 +41,13 @@ Transformer::Transformer(TransformerConfig newConfig) {
     }
     // Load model
     model = new cppflow::model(config.modelPath);
-    // Create MEL basis
-    basis = librosa::internal::melfilter(
-        config.sampleRate,
-        config.nFFT,
-        config.nMel,
-        config.fMin,
-        config.fMax
-    ).cast<double>();
 }
 
 void Transformer::Synthesize(string text) {
 
     auto phonemes = phonemize(text);
     auto tokens = tokenize(phonemes);
-    MatrixXd mel = runModel(tokens);
+    auto mel = runModel(tokens);
     vector<float> wav = vocode(mel);
     //MatrixXd s = melToSTFT(mel);
     //vector<float> wav = griffinLim(s);
@@ -111,7 +102,7 @@ vector<int> Transformer::tokenize(wstring phons) {
     return tokens;
 }
 
-MatrixXd Transformer::runModel(vector<int> tokens) {
+vector<float> Transformer::runModel(vector<int> tokens) {
 
     std::vector<int64_t> shape(1);
     shape[0] = tokens.size();
@@ -123,169 +114,15 @@ MatrixXd Transformer::runModel(vector<int> tokens) {
 
     auto output = (*model)({ {MODEL_INPUT, input} }, { MODEL_OUTPUT });
     auto values = output[0].get_data<float>();
-    MatrixXf mat = MatrixXf::Map(values.data(), config.nMel, values.size() / config.nMel);
-
-    return mat.cast<double>();
-}
-
-vector<float> Transformer::vocode(MatrixXd mel) {
-    cppflow::model vocoder("/home/egert/Prog/TTS-CPP/models/vocoder");
-
-    MatrixXf melT = mel.transpose().cast<float>();
-
-    std::vector<int64_t> shape(2);
-    shape[0] = melT.rows();
-    shape[1] = melT.cols();
-
-    std::vector<float> melRaw(melT.data(), melT.data() + melT.size());
-
-    cppflow::tensor input;
-    input = cppflow::tensor(melRaw, shape);
-    //input = cppflow::cast(input, TF_DOUBLE, TF_FLOAT);
-    input = cppflow::expand_dims(input, 0);
-
-    auto output = vocoder({ {VOCODER_INPUT, input} }, { VOCODER_OUTPUT });
-    auto values = output[0].get_data<float>();
     return values;
 }
 
-
-MatrixXd Transformer::melToSTFT(MatrixXd mel) {
-    MatrixXd B = mel.array().exp().matrix();
-    VectorXd temp;
-    MatrixXd inverse(basis.cols(), B.cols());
-    for (int i = 0; i < B.cols(); i++) {
-        cout << i << "\t";
-        temp = nnls(B.col(i));
-        inverse.col(i) = temp;
-    }
-    return inverse;
+vector<float> Transformer::vocode(vector<float> mel) {
+    return mel;
 }
 
-VectorXd Transformer::nnls(VectorXd b) {
-    VectorXd x = basis.bdcSvd(ComputeThinU | ComputeThinV).solve(b);
-    for (int j = 0; j < x.size(); j++) {
-        if (x[j] < 0) {
-            x[j] = 0;
-        }
-    }
-    vector<double> xRaw;
-    xRaw.resize(x.size());
-    VectorXd::Map(xRaw.data(), x.size()) = x;
-
-    nlopt::opt opt(nlopt::LD_LBFGS, x.size());
-    OptData data{
-        .A = basis,
-        .b = b
-    };
-    opt.set_min_objective(optFunc, &data);
-    opt.set_lower_bounds(0);
-    opt.set_maxeval(OPT_MAX_EVAL);
-    opt.set_xtol_abs(OPT_TOL_ABS);
-    double minf;
-
-    try {
-        nlopt::result result = opt.optimize(xRaw, minf);
-        cout << minf << endl;
-    }
-    catch (std::exception& e) {
-        std::cout << "nlopt failed: " << e.what() << std::endl;
-    }
-    x = VectorXd::Map(xRaw.data(), xRaw.size());
-    return x;
-}
-
-double optFunc(const vector<double>& xRaw, vector<double>& gradRaw, void* f_data) {
-    auto data = (OptData*)f_data;
-    VectorXd x = VectorXd::Map(xRaw.data(), xRaw.size());
-    VectorXd diff = data->A * x - data->b;
-
-    if (!gradRaw.empty()) {
-        VectorXd grad = VectorXd::Map(gradRaw.data(), gradRaw.size());
-        grad = data->A.transpose() * diff;
-    }
-    return 0.5 * diff.squaredNorm();
-}
-
-complex<float> randAng() {
-    auto x = std::exp((complex<double>)2i * (complex<double>)M_PI * (complex<double>)rand() / (complex<double>)RAND_MAX);
-    return (complex<float>)x;
-}
-
-vector<float> Transformer::griffinLim(MatrixXd S) {
-    VectorXf out;
-    MatrixXf mag = S.cast<float>();
-
-    // Initialize phase with random angles
-    MatrixXcf angles = MatrixXcf::NullaryExpr(
-        mag.rows(), mag.cols(),
-        [&]() {
-            return randAng();
-        }
-    );
 
 
-    MatrixXcf stft;
-    vector<float> inverse;
-
-    //MatrixXcf stft;
-
-    vector<complex<float>> rebuiltRaw;
-    rebuiltRaw.resize(S.rows() * S.cols());
-    MatrixXcf rebuilt = MatrixXcf::Map(rebuiltRaw.data(), S.rows(), S.cols());
-
-    MatrixXcf prev;
-
-
-    //invStd.resize(mag.rows() * mag.cols());
-    //Map<Array<complex<float>, Dynamic, Dynamic, RowMajor> > invEig(invStd.data());
-
-    float conf = GL_MOMENTUM / (1 + GL_MOMENTUM);
-    for (int i = 0; i < GL_ITER; i++) {
-        prev = rebuilt;
-
-        stft = (mag.array() * angles.array()).matrix();
-        if (!nanosnap::istft(
-            stft.data(),
-            stft.rows(),
-            stft.cols(),
-            config.hopLength,
-            config.winLength,
-            &inverse
-        )) {
-            cout << "Inverse STFT failed" << endl;
-        }
-
-        if (!nanosnap::stft(
-            inverse.data(),
-            inverse.size(),
-            config.nFFT,
-            config.hopLength,
-            config.winLength,
-            &rebuiltRaw
-        )) {
-            cout << "STFT failed" << endl;
-        }
-        rebuilt = MatrixXcf::Map(rebuiltRaw.data(), S.rows(), S.cols());
-        angles = rebuilt - prev * conf;
-        angles = (angles.array() / (angles.array().abs() + 1e-16)).eval();
-    }
-
-    stft = (mag.array() * angles.array()).matrix();
-    if (!nanosnap::istft(
-        stft.data(),
-        stft.rows(),
-        stft.cols(),
-        config.hopLength,
-        config.winLength,
-        &inverse
-    )) {
-        cout << "Inverse STFT failed" << endl;
-    }
-
-
-    return inverse;
-}
 
 bool Transformer::saveWAV(string filename, vector<float> data) {
     AudioFile<float> a;
@@ -294,11 +131,4 @@ bool Transformer::saveWAV(string filename, vector<float> data) {
     //a.setNumSamplesPerChannel(data.size());
     a.samples[0] = data;
     return a.save("/home/egert/Prog/TTS-CPP/temp/Karu.wav", AudioFileFormat::Wave);
-}
-
-const static IOFormat CSVFormat(StreamPrecision, DontAlignCols, ", ", "\n");
-
-void matToCSV(MatrixXd mat, string filePath) {
-    ofstream file(filePath.c_str());
-    file << mat.format(CSVFormat);
 }
