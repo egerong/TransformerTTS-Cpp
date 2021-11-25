@@ -56,6 +56,8 @@ private:
     std::vector<int> tokenize(std::wstring phons);
     Eigen::MatrixXd runModel(std::vector<int> tokens);
 
+    std::vector<float> vocode(Eigen::MatrixXd mel);
+
     Eigen::MatrixXd melToSTFT(Eigen::MatrixXd B);
     Eigen::VectorXd nnls(Eigen::VectorXd b);
     std::vector<float> griffinLim(Eigen::MatrixXd S);

@@ -6,8 +6,13 @@ using namespace Eigen;
 #define ALL_PHONEMES " !'(),-.:;?abcdefhijklmnopqrstuvwxyzæçðøħŋœǀǁǂǃɐɑɒɓɔɕɖɗɘəɚɛɜɞɟɠɡɢɣɤɥɦɧɨɪɫɬɭɮɯɰɱɲɳɴɵɶɸɹɺɻɽɾʀʁʂʃʄʈʉʊʋʌʍʎʏʐʑʒʔʕʘʙʛʜʝʟʡʢˈˌːˑ˞βθχᵻⱱ"
 #define PUNCTUATION "!,-.:;?()"
 
+// Model input and output names, get with command
+// saved_model_cli show --dir model --all
 #define MODEL_INPUT "serving_default_input_1:0"
 #define MODEL_OUTPUT "StatefulPartitionedCall:14"
+
+#define VOCODER_INPUT "serving_default_mels:0"
+#define VOCODER_OUTPUT "StatefulPartitionedCall:0"
 
 #define OPT_MAX_EVAL 5000
 #define OPT_TOL_ABS 1e-8
@@ -52,8 +57,9 @@ void Transformer::Synthesize(string text) {
     auto phonemes = phonemize(text);
     auto tokens = tokenize(phonemes);
     MatrixXd mel = runModel(tokens);
-    MatrixXd s = melToSTFT(mel);
-    vector<float> wav = griffinLim(s);
+    vector<float> wav = vocode(mel);
+    //MatrixXd s = melToSTFT(mel);
+    //vector<float> wav = griffinLim(s);
     bool success = saveWAV("filename", wav);
     //matToCSV(stft, "/home/egert/Prog/TTS-CPP/temp/inverse.csv");
 }
@@ -120,6 +126,27 @@ MatrixXd Transformer::runModel(vector<int> tokens) {
     MatrixXf mat = MatrixXf::Map(values.data(), config.nMel, values.size() / config.nMel);
 
     return mat.cast<double>();
+}
+
+vector<float> Transformer::vocode(MatrixXd mel) {
+    cppflow::model vocoder("/home/egert/Prog/TTS-CPP/models/vocoder");
+
+    MatrixXf melT = mel.transpose().cast<float>();
+
+    std::vector<int64_t> shape(2);
+    shape[0] = melT.rows();
+    shape[1] = melT.cols();
+
+    std::vector<float> melRaw(melT.data(), melT.data() + melT.size());
+
+    cppflow::tensor input;
+    input = cppflow::tensor(melRaw, shape);
+    //input = cppflow::cast(input, TF_DOUBLE, TF_FLOAT);
+    input = cppflow::expand_dims(input, 0);
+
+    auto output = vocoder({ {VOCODER_INPUT, input} }, { VOCODER_OUTPUT });
+    auto values = output[0].get_data<float>();
+    return values;
 }
 
 
