@@ -13,12 +13,6 @@ using namespace std;
 #define VOCODER_INPUT "serving_default_mels:0"
 #define VOCODER_OUTPUT "StatefulPartitionedCall:0"
 
-#define OPT_MAX_EVAL 5000
-#define OPT_TOL_ABS 1e-8
-
-#define GL_ITER 32
-#define GL_MOMENTUM 0.99
-
 // For char to wchar conversion
 using convert_t = std::codecvt_utf8<wchar_t>;
 wstring_convert<convert_t, wchar_t> strconverter;
