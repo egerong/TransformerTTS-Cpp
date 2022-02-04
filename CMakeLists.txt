@@ -21,6 +21,9 @@ find_library(ESPEAK_LIB espeak-ng)
 # Tensorflow
 find_library(TENSORFLOW_LIB tensorflow HINT $ENV{HOME}/libtensorflow2/lib)
 
+set(Torch_DIR libtorch/share/cmake/Torch)
+find_package(Torch REQUIRED)
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${TORCH_CXX_FLAGS}")
 
 # Link all
 target_link_libraries(
@@ -28,6 +31,7 @@ target_link_libraries(
     Includes
     ${ESPEAK_LIB}
     ${TENSORFLOW_LIB}
+    ${TORCH_LIBRARIES}
 )
 
 set(CPACK_PROJECT_NAME ${PROJECT_NAME})

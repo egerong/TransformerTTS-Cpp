@@ -8,7 +8,7 @@ using namespace std;
 // Model input and output names, get with command
 // saved_model_cli show --dir model --all
 #define MODEL_INPUT "serving_default_input_1:0"
-#define MODEL_OUTPUT "StatefulPartitionedCall:14"
+#define MODEL_OUTPUT "StatefulPartitionedCall:12"
 
 #define VOCODER_INPUT "serving_default_mels:0"
 #define VOCODER_OUTPUT "StatefulPartitionedCall:0"
@@ -35,6 +35,8 @@ Transformer::Transformer(TransformerConfig newConfig) {
     }
     // Load model
     model = new cppflow::model(config.modelPath);
+    // Load vocoder
+    vocoder = torch::jit::load("/home/egert/EKI/TransformerTTS/out/hifigan");
 }
 
 void Transformer::Synthesize(string text) {
@@ -112,7 +114,33 @@ vector<float> Transformer::runModel(vector<int> tokens) {
 }
 
 vector<float> Transformer::vocode(vector<float> mel) {
-    return mel;
+
+
+    auto options = torch::TensorOptions().dtype(torch::kFloat32);
+    //unsigned long int shape = { config.nMel, mel.size() };
+    torch::Tensor inputTensor = torch::from_blob(
+        mel.data(),
+        { 1, unsigned(mel.size() / config.nMel), config.nMel },
+        torch::TensorOptions().dtype(torch::kFloat32)
+    );
+    inputTensor = inputTensor.transpose(1, 2);
+
+    std::vector<torch::jit::IValue> inputs;
+    inputs.push_back(inputTensor);
+
+    auto outputs = vocoder.forward(inputs);
+    auto outputTensor = outputs.toTensor();
+    //vector<float> wavFloat(wavDouble.begin(), wavDouble.end());
+
+    vector<float> wav(
+        outputTensor.data_ptr<float>(),
+        outputTensor.data_ptr<float>() + outputTensor.numel()
+    );
+    //scout << outputTensor.size() << endl;
+    return wav;
+}
+
+void Test(void) {
 }
 
 
@@ -124,5 +152,5 @@ bool Transformer::saveWAV(string filename, vector<float> data) {
     a.setSampleRate(config.sampleRate);
     //a.setNumSamplesPerChannel(data.size());
     a.samples[0] = data;
-    return a.save("/home/egert/Prog/TTS-CPP/temp/Karu.wav", AudioFileFormat::Wave);
+    return a.save("/home/egert/EKI/TTS-CPP/test.wav", AudioFileFormat::Wave);
 }

@@ -17,6 +17,7 @@
 
 #include <espeak-ng/speak_lib.h>
 #include "cppflow/cppflow.h"
+#include "torch/script.h"
 #include "audiofile.h"
 
 struct TransformerConfig {
@@ -24,6 +25,7 @@ struct TransformerConfig {
     std::string espeakLang;
     std::string espeakDataPath;
     std::string modelPath;
+    std::string vocoderPath;
     bool withStress;
     int sampleRate;
     int nFFT;
@@ -41,6 +43,7 @@ private:
     TransformerConfig config;
     std::map<wchar_t, int> tokenMap;
     cppflow::model* model;
+    torch::jit::script::Module vocoder;
 
 public:
     Transformer(TransformerConfig newConfig);
@@ -54,3 +57,5 @@ private:
 
     bool saveWAV(std::string filename, std::vector<float> data);
 };
+
+void Test(void);
