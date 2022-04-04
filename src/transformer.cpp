@@ -21,14 +21,13 @@ wstring_convert<convert_t, wchar_t> strconverter;
 Transformer::Transformer(TransformerConfig newConfig) {
     config = newConfig;
 
-    // Check for cuda support
-    bool cudaTorch = torch::cuda::is_available();
-    if (cudaTorch) {
-        cout << "Torch CUDA available" << endl;
-    } else {
-        cout << "No GPU found" << endl;
-    }
-
+    // Set environment variables
+    char buffer[32];
+    sprintf(buffer, "TF_CPP_MIN_LOG_LEVEL=%d", config.tfLogLevel);
+    putenv(buffer);
+    sprintf(buffer, "CUDA_VISIBLE_DEVICES=%d", config.cudaVisibleDevices);
+    putenv(buffer);
+    
     // Init eSpeak
     espeak_Initialize(AUDIO_OUTPUT_SYNCHRONOUS, 1, config.espeakDataPath.c_str(), 0);
     int e = espeak_SetVoiceByName(config.espeakLang.c_str());
@@ -46,6 +45,13 @@ Transformer::Transformer(TransformerConfig newConfig) {
     model = new cppflow::model(config.modelPath);
     // Load vocoder
     vocoder = torch::jit::load(config.vocoderPath);
+    // Check for cuda support
+    bool cudaTorch = torch::cuda::is_available();
+    if (cudaTorch) {
+        cout << "Torch CUDA available" << endl;
+    } else {
+        cout << "No GPU found" << endl;
+    }
 }
 
 void Transformer::Synthesize(string text) {

@@ -23,19 +23,19 @@
 #include "audiofile.h"
 
 struct TransformerConfig {
+    // General
     bool verbose;
+    int cudaVisibleDevices;
+    // eSpeak
     std::string espeakLang;
     std::string espeakDataPath;
+    // Acoustic model
     std::string modelPath;
-    std::string vocoderPath;
-    bool withStress;
     int sampleRate;
-    int nFFT;
     int nMel;
-    int hopLength;
-    int winLength;
-    int fMin;
-    int fMax;
+    int tfLogLevel;
+    // Vocoder
+    std::string vocoderPath;
 };
 
 class Transformer {
