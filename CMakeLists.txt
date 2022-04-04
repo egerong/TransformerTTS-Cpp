@@ -22,6 +22,15 @@ find_library(ESPEAK_LIB espeak-ng)
 find_library(TENSORFLOW_LIB tensorflow HINT $ENV{HOME}/libtensorflow2/lib)
 
 set(Torch_DIR libtorch/share/cmake/Torch)
+set (CUDA_CUDART_LIBRARY /usr/local/cuda/lib64/libcudart.so)
+#set (CMAKE_CUDA_COMPILER /usr/local/cuda-11.6/bin/nvcc)
+#set(CUDA_HOME /usr/local/cuda)
+#set(CUDA_PATH /usr/local/cuda)
+#CUDNN_INCLUDE_DIR
+#set(PATH /usr/local/cuda-11.6/bin:$PATH)
+#set(CUDA_TOOLKIT_ROOT_DIR /usr/local/cuda)
+#et(CUDA_V "11.6")
+set(CUDA_INCLUDE_DIRS /usr/local/cuda-11.5/include)
 find_package(Torch REQUIRED)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${TORCH_CXX_FLAGS}")
 
@@ -31,6 +40,7 @@ target_link_libraries(
     Includes
     ${ESPEAK_LIB}
     ${TENSORFLOW_LIB}
+    #${CUDA_LIBRARIES}
     ${TORCH_LIBRARIES}
 )
 

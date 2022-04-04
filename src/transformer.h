@@ -7,6 +7,7 @@
 #include <string.h>
 #include <codecvt>
 #include <locale>
+#include <time.h>
 
 #include <map>
 #include <vector>
@@ -17,6 +18,7 @@
 
 #include <espeak-ng/speak_lib.h>
 #include "cppflow/cppflow.h"
+#include "torch/torch.h"
 #include "torch/script.h"
 #include "audiofile.h"
 
@@ -41,6 +43,7 @@ public:
     std::string error;
 private:
     TransformerConfig config;
+    bool cudaTorch;
     std::map<wchar_t, int> tokenMap;
     cppflow::model* model;
     torch::jit::script::Module vocoder;

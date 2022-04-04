@@ -20,6 +20,15 @@ wstring_convert<convert_t, wchar_t> strconverter;
 
 Transformer::Transformer(TransformerConfig newConfig) {
     config = newConfig;
+
+    // Check for cuda support
+    bool cudaTorch = torch::cuda::is_available();
+    if (cudaTorch) {
+        cout << "Torch CUDA available" << endl;
+    } else {
+        cout << "No GPU found" << endl;
+    }
+
     // Init eSpeak
     espeak_Initialize(AUDIO_OUTPUT_SYNCHRONOUS, 1, config.espeakDataPath.c_str(), 0);
     int e = espeak_SetVoiceByName(config.espeakLang.c_str());
@@ -36,19 +45,25 @@ Transformer::Transformer(TransformerConfig newConfig) {
     // Load model
     model = new cppflow::model(config.modelPath);
     // Load vocoder
-    vocoder = torch::jit::load("/home/egert/EKI/TransformerTTS/out/hifigan");
+    vocoder = torch::jit::load(config.vocoderPath);
 }
 
 void Transformer::Synthesize(string text) {
-
+    auto startTime = clock();
     auto phonemes = phonemize(text);
     auto tokens = tokenize(phonemes);
+    auto preTime = clock();
     auto mel = runModel(tokens);
+    auto modelTime = clock();
     vector<float> wav = vocode(mel);
-    //MatrixXd s = melToSTFT(mel);
-    //vector<float> wav = griffinLim(s);
+    auto vocodeTime = clock();
     bool success = saveWAV("filename", wav);
-    //matToCSV(stft, "/home/egert/Prog/TTS-CPP/temp/inverse.csv");
+    printf(
+        "\nPreprocess time: %f\nModel time: %f\nVocode time: %f\n",
+        (double)(preTime - startTime) / CLOCKS_PER_SEC,
+        (double)(modelTime - preTime) / CLOCKS_PER_SEC,
+        (double)(vocodeTime - modelTime) / CLOCKS_PER_SEC
+    );
 }
 
 wstring Transformer::phonemize(string text) {
@@ -114,7 +129,7 @@ vector<float> Transformer::runModel(vector<int> tokens) {
 }
 
 vector<float> Transformer::vocode(vector<float> mel) {
-
+    torch::NoGradGuard no_grad_guard;
 
     auto options = torch::TensorOptions().dtype(torch::kFloat32);
     //unsigned long int shape = { config.nMel, mel.size() };
