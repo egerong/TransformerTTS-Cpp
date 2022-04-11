@@ -7,6 +7,7 @@
 #include <string.h>
 #include <codecvt>
 #include <locale>
+#include <time.h>
 
 #include <map>
 #include <vector>
@@ -17,26 +18,24 @@
 
 #include <espeak-ng/speak_lib.h>
 #include "cppflow/cppflow.h"
-#include "Eigen/Eigen"
-#include "Eigen/Dense"
-#include "librosa.h"
-#include <nlopt.hpp>
-#include "nanosnap/nanosnap.h"
+#include "torch/torch.h"
+#include "torch/script.h"
 #include "audiofile.h"
 
 struct TransformerConfig {
+    // General
     bool verbose;
+    int cudaVisibleDevices;
+    // eSpeak
     std::string espeakLang;
     std::string espeakDataPath;
+    // Acoustic model
     std::string modelPath;
-    bool withStress;
     int sampleRate;
-    int nFFT;
     int nMel;
-    int hopLength;
-    int winLength;
-    int fMin;
-    int fMax;
+    int tfLogLevel;
+    // Vocoder
+    std::string vocoderPath;
 };
 
 class Transformer {
@@ -44,9 +43,10 @@ public:
     std::string error;
 private:
     TransformerConfig config;
+    bool cudaTorch;
     std::map<wchar_t, int> tokenMap;
     cppflow::model* model;
-    Eigen::MatrixXd basis;
+    torch::jit::script::Module vocoder;
 
 public:
     Transformer(TransformerConfig newConfig);
@@ -54,19 +54,11 @@ public:
 private:
     std::wstring phonemize(std::string text);
     std::vector<int> tokenize(std::wstring phons);
-    Eigen::MatrixXd runModel(std::vector<int> tokens);
+    std::vector<float> runModel(std::vector<int> tokens);
 
-    Eigen::MatrixXd melToSTFT(Eigen::MatrixXd B);
-    Eigen::VectorXd nnls(Eigen::VectorXd b);
-    std::vector<float> griffinLim(Eigen::MatrixXd S);
+    std::vector<float> vocode(std::vector<float> mel);
+
     bool saveWAV(std::string filename, std::vector<float> data);
 };
 
-struct OptData {
-    Eigen::MatrixXd A;
-    Eigen::VectorXd b;
-};
-
-double optFunc(const std::vector<double>& xRaw, std::vector<double>& gradRaw, void* f_data);
-
-void matToCSV(Eigen::MatrixXd mat, std::string filePath);
+void Test(void);
